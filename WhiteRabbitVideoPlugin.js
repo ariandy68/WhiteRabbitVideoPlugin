@@ -13,7 +13,7 @@
 		quality: { default: 720, options: [720, 480] }
 		//required: videoID, thumbID, imdbID, title
 	};
-	const template = '<video disablePictureInPicture controls controlsList="nodownload" data-poster="https://vz-cb1fdbea-917.b-cdn.net/|videoID|/thumbnail_|thumbID|.jpg"><source type="video/mp4" size="480" src = "https://vz-cb1fdbea-917.b-cdn.net/|videoID|/play_480p.mp4" /><source type="video/mp4" size="720" src="https://vz-cb1fdbea-917.b-cdn.net/|videoID|/play_720p.mp4" /><source type="application/x-mpegURL" src="https://vz-cb1fdbea-917.b-cdn.net/|videoID|/playlist.m3u8"></video>';
+	const template = '<video crossorigin disablePictureInPicture controls controlsList="nodownload" data-poster="https://vz-cb1fdbea-917.b-cdn.net/|videoID|/thumbnail_|thumbID|.jpg"><source type="video/mp4" size="480" src = "https://vz-cb1fdbea-917.b-cdn.net/|videoID|/play_480p.mp4" /><source type="video/mp4" size="720" src="https://vz-cb1fdbea-917.b-cdn.net/|videoID|/play_720p.mp4" /><source type="application/x-mpegURL" src="https://vz-cb1fdbea-917.b-cdn.net/|videoID|/playlist.m3u8"></video>';
 	let client;
 	$.fn.WhiteRabbitVideoPlugin = async function (options) {
 		options = $.extend({}, defaults, options);
@@ -27,6 +27,11 @@
 			const strvideo = template.replace(/\|videoID\|/g, options.videoID).replace(/\|thumbID\|/g, options.thumbID)
 			$this.each(function () {
 				const $video = $(strvideo).appendTo($(this)), player = new Plyr($video.get(0), { title: options.title, quality: options.quality });
+        if (options.captions) {
+          options.captions.forEach(function (caption) {
+            $video.append(`<track kind="captions" label="${caption.title}" src="https://vz-cb1fdbea-917.b-cdn.net/${options.videoID}/captions/${caption.src}" srclang="${caption.code}" default>`);
+          });
+        }
 				$video.on('play', async function (ev) {
 					const paid = Boolean(localStorage.getItem('wr-' + options.imdbID) || false);
 					if (paid) return;
