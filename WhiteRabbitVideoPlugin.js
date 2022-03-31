@@ -2,32 +2,45 @@
 // White Rabbit Video Plugin
 // Prerequisites:
 // jQuery
-// White Rabbit's index.mjs downloaded locally
+// White Rabbit's index.mjs and metadata.json downloaded locally
 // Plyr's css & js downloaded locally https://plyr.io/
-// Fill in: ./path/to/white/rabbit/index.mjs - ./path/to/plyr.css - path/to/plyr.js
+// Fill in: ./path/to/white/rabbit/index.mjs - ./path/to/white/rabbit/metadata.json - ./path/to/plyr.css - path/to/plyr.js
 // usage: $('.white-rabbit').WhiteRabbitVideoPlugin({ videoID:'xyz', thumbID:'abc', imdbID:'tt123', title:'film title' });
 // in html: insert tags like <p class="white-rabbit"></p> or <div class="white-rabbit"></div> where needed
 // ----------------
-(function ($) {
+(function($) {
 	const defaults = {
-		quality: { default: 720, options: [720, 480] }
-		//required: videoID, thumbID, imdbID, title
+		//required: imdbID
+		//optional: defaultQuality (i.e. 720 or 480...)
 	};
-	const template = '<video disablePictureInPicture controls controlsList="nodownload" data-poster="https://vz-cb1fdbea-917.b-cdn.net/|videoID|/thumbnail_|thumbID|.jpg"><source type="video/mp4" size="480" src = "https://vz-cb1fdbea-917.b-cdn.net/|videoID|/play_480p.mp4" /><source type="video/mp4" size="720" src="https://vz-cb1fdbea-917.b-cdn.net/|videoID|/play_720p.mp4" /><source type="application/x-mpegURL" src="https://vz-cb1fdbea-917.b-cdn.net/|videoID|/playlist.m3u8"></video>';
-	let client;
-	$.fn.WhiteRabbitVideoPlugin = async function (options) {
+	const server = 'https://vz-cb1fdbea-917.b-cdn.net/';
+	let client, metadata;
+	$.fn.AD_WRVideo = async function(options) {
 		options = $.extend({}, defaults, options);
+		let requestingPayment = false, $this = this, data;
 		if (!client) {
-			let { WhiteRabbitClient } = await import('./path/to/white/rabbit/index.mjs');
+			const { WhiteRabbitClient } = await import('./path/to/white/rabbit/index.mjs');
 			//uncomment "host" for test environment
 			client = new WhiteRabbitClient({ /*host: 'https://staging-wallet.whiterabbit.one'*/ });
 		}
-		let requestingPayment = false, $this = this;
-		const scriptLoaded = function () {
-			const strvideo = template.replace(/\|videoID\|/g, options.videoID).replace(/\|thumbID\|/g, options.thumbID)
-			$this.each(function () {
-				const $video = $(strvideo).appendTo($(this)), player = new Plyr($video.get(0), { title: options.title, quality: options.quality });
-				$video.on('play', async function (ev) {
+		const scriptLoaded = function() {
+			const strvideo = `<video crossorigin disablePictureInPicture controls preload="none" controlsList="nodownload" data-poster="${server}${data.videoID}/thumbnail_${data.thumbID}.jpg"><source type="application/x-mpegURL" src="${server}${data.videoID}/playlist.m3u8"></video>`;
+			$this.each(function() {
+				const $video = $(strvideo).appendTo($(this));
+				if (data.quality) {
+					for (let i in data.quality) {
+						const size = data.quality[i], strsource = `<source type="video/mp4" size="${size}" src = "${server}${data.videoID}/play_${size}p.mp4" />`;
+						$(strsource).appendTo($video);
+					}
+				}
+				if (data.captions) {
+					for (let i in data.captions) {
+						const caption = data.captions[i], strtrack = `<track kind="captions" label="${caption.title}" src="${server}${data.videoID}/captions/${caption.src}" srclang="${caption.code}" default>`;
+						$(strtrack).appendTo($video);
+					}
+				}
+				const player = new Plyr($video.get(0), { title: data.title, quality: { default: options.defaultQuality || data.quality[0], options: data.quality } });
+				$video.on('play', async function(ev) {
 					const paid = Boolean(localStorage.getItem('wr-' + options.imdbID) || false);
 					if (paid) return;
 
@@ -38,7 +51,6 @@
 					requestingPayment = true;
 					const res = await client.requestPayment(options.imdbID);
 					requestingPayment = false;
-					console.log(res);
 
 					if (res && res.status) {
 						// resume playback if paid
@@ -49,13 +61,19 @@
 				});
 			});
 		};
-		if (typeof (Plyr) === 'undefined') {
-			$('<link/>', {
-				rel: 'stylesheet',
-				type: 'text/css',
-				href: './path/to/plyr.css'
-			}).appendTo('head');
-			$.getScript('./path/to/plyr.js', scriptLoaded);
-		} else scriptLoaded();
+		const scriptLoaded0 = function () {
+			data = metadata[options.imdbID];
+			if (!data) return;
+			if (typeof (Plyr) === 'undefined') {
+				$('<link/>', {
+					rel: 'stylesheet',
+					type: 'text/css',
+					href: './path/to/plyr.css'
+				}).appendTo('head');
+				$.getScript('./path/to/plyr.js', scriptLoaded);
+			} else scriptLoaded();
+		};
+		if (!metadata) $.getJSON('./path/to/white/rabbit/metadata.json').done(function (jsondata) { metadata = jsondata; scriptLoaded0(); });
+		else scriptLoaded0();
 	};
 })(jQuery);
